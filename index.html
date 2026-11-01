@@ -106,8 +106,15 @@
   </div>
 
   <div class="cmd">
+    <h3>語言環境</h3>
+    <p class="dim">不需 clone repo。python3 + pip + venv、nvm + Node.js LTS、rust (rustup)。不勾選：沒裝的逐一詢問 y/N；勾選：直接安裝 / 升級。</p>
+    <div class="chips" id="lang-chips"></div>
+    <div class="shell"><pre id="lang-cmd" data-args="lang"></pre><button type="button">複製</button></div>
+  </div>
+
+  <div class="cmd">
     <h3>ACP agents</h3>
-    <p class="dim">不需 clone repo。不勾選：沒裝的逐一詢問 y/N；勾選：直接安裝 / 升級。</p>
+    <p class="dim">不需 clone repo。不勾選：沒裝的逐一詢問 y/N；勾選：直接安裝 / 升級。缺 Node.js 時會先詢問是否安裝。</p>
     <div class="chips" id="agent-chips"></div>
     <div class="shell"><pre id="agent-cmd" data-args="agent"></pre><button type="button">複製</button></div>
   </div>
@@ -120,14 +127,19 @@
   </div>
 
   <p class="dim">加 <code>-y</code> 可略過所有提問 (被取代的檔案仍會備份)；
-    已有 checkout 時也可直接執行 <code>~/repos/lyanemacs/scripts/setup.sh &lt;command&gt;</code>。</p>
+    已有 checkout 時也可直接執行 <code>~/repos/lyanemacs/scripts/setup.sh &lt;command&gt;</code>。
+    lang / agent / lsp 也能單獨執行，例如 <code>curl -fsSL …/scripts/agent.sh | bash -s -- claude</code>。</p>
 
   <h2>檔案</h2>
   <p class="dim">依 <a class="file" data-path="manifest.tsv">manifest.tsv</a> 安裝到家目錄；點檔名可直接檢視。</p>
   <table>
     <thead><tr><th>方式</th><th>來源</th><th>安裝到</th></tr></thead>
     <tbody id="files">
-      <tr><td></td><td class="path"><a class="file" data-path="scripts/setup.sh">scripts/setup.sh</a></td><td class="dim">安裝 / 同步腳本</td></tr>
+      <tr><td></td><td class="path"><a class="file" data-path="scripts/setup.sh">scripts/setup.sh</a></td><td class="dim">安裝 Emacs、同步設定；轉交 lang / agent / lsp</td></tr>
+      <tr><td></td><td class="path"><a class="file" data-path="scripts/lang.sh">scripts/lang.sh</a></td><td class="dim">python3、Node.js (nvm)、rust</td></tr>
+      <tr><td></td><td class="path"><a class="file" data-path="scripts/agent.sh">scripts/agent.sh</a></td><td class="dim">ACP agents</td></tr>
+      <tr><td></td><td class="path"><a class="file" data-path="scripts/lsp.sh">scripts/lsp.sh</a></td><td class="dim">LSP servers</td></tr>
+      <tr><td></td><td class="path"><a class="file" data-path="scripts/common.sh">scripts/common.sh</a></td><td class="dim">共用函式 (各腳本自動載入)</td></tr>
     </tbody>
   </table>
 
@@ -170,7 +182,7 @@
     button.addEventListener("click", () => copy($("pre", button.parentElement).textContent, button));
   });
 
-  // Agent / language names come from AGENTS=(...) and LANGS=(...) in setup.sh.
+  // Names come from RUNTIMES / AGENTS / LANGS in lang.sh, agent.sh and lsp.sh.
   function chips(container, names, pre, subcommand) {
     for (const name of names) {
       const label = document.createElement("label");
@@ -185,11 +197,13 @@
       pre.textContent = command([subcommand, ...picked].join(" "));
     });
   }
-  fetch("scripts/setup.sh").then((r) => r.ok ? r.text() : Promise.reject(r.status)).then((script) => {
-    const list = (name) => (script.match(new RegExp(`^${name}=\\(([^)]*)\\)`, "m")) || [, ""])[1].trim().split(/\s+/).filter(Boolean);
-    chips($("#agent-chips"), list("AGENTS"), $("#agent-cmd"), "agent");
-    chips($("#lsp-chips"), list("LANGS"), $("#lsp-cmd"), "lsp");
-  }).catch(() => {});
+  for (const [subcommand, variable] of [["lang", "RUNTIMES"], ["agent", "AGENTS"], ["lsp", "LANGS"]]) {
+    fetch(`scripts/${subcommand}.sh`).then((r) => r.ok ? r.text() : Promise.reject(r.status)).then((script) => {
+      const match = script.match(new RegExp(`^${variable}=\\(([^)]*)\\)`, "m"));
+      const names = match ? match[1].trim().split(/\s+/).filter(Boolean) : [];
+      chips($(`#${subcommand}-chips`), names, $(`#${subcommand}-cmd`), subcommand);
+    }).catch(() => {});
+  }
 
   // File table from manifest.tsv.
   const tbody = $("#files");

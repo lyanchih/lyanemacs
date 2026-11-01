@@ -1,39 +1,23 @@
 #!/usr/bin/env bash
-# lyanemacs setup: install and sync Emacs, its config, ACP agents and LSP servers.
+# lyanemacs setup: install Emacs and sync this repo's config into ~/.emacs.d.
 #
 #   curl -fsSL https://lyanemacs.qiyecaotw.net/scripts/setup.sh | bash
 #   curl -fsSL https://lyanemacs.qiyecaotw.net/scripts/setup.sh | bash -s -- pull
-#   curl -fsSL https://lyanemacs.qiyecaotw.net/scripts/setup.sh | bash -s -- agent [name...]
-#   curl -fsSL https://lyanemacs.qiyecaotw.net/scripts/setup.sh | bash -s -- lsp [lang...]
+#   curl -fsSL https://lyanemacs.qiyecaotw.net/scripts/setup.sh | bash -s -- lang|agent|lsp [name...]
 #   scripts/setup.sh <command>                         (from a checkout)
 #
 # Piped from curl, install / pull / sync clone (or reuse) $LYANEMACS_DIR and
 # re-run that checkout's copy of the script, so both ways behave the same.
-# agent and lsp need no checkout and run straight from the pipe.
+# lang / agent / lsp are separate scripts (lang.sh, agent.sh, lsp.sh); setup.sh
+# runs them from the checkout, or downloads them when piped, without cloning.
 
 set -euo pipefail
 
-LYANEMACS_REPO=${LYANEMACS_REPO:-https://github.com/lyanchih/lyanemacs.git}
-LYANEMACS_DIR=${LYANEMACS_DIR:-$HOME/repos/lyanemacs}
 STATE_DIR=${XDG_STATE_HOME:-$HOME/.local/state}/lyanemacs
-ACP_REGISTRY=https://raw.githubusercontent.com/agentclientprotocol/registry/main
-WRAPPER_MARKER='# managed by lyanemacs'
-
-AGENTS=(claude codex cursor antigravity opencode)
-LANGS=(python web c rust lisp php)
-
-# Repo-local LSP packages, installed into $TOOLS_DIR by `lsp`.
-PY_PACKAGES=('python-lsp-server[all]')
-NPM_PACKAGES=(typescript typescript-language-server vscode-langservers-extracted prettier)
-COMPOSER_PACKAGES=(phpactor/phpactor)
-# What `lsp` may leave in $LYANEMACS_DIR before the repo is cloned there.
+# What lsp.sh may leave in $LYANEMACS_DIR before the repo is cloned there.
 TOOL_ENTRIES=(.venv node_modules vendor package.json package-lock.json composer.json composer.lock)
 
-REPO=      # checkout this script runs from; empty when piped without one
-TOOLS_DIR= # where `lsp` installs: the checkout, else $LYANEMACS_DIR
-
-ASSUME_YES=0
-FLAGS=()
+REPO= # checkout to sync from
 
 usage() {
   cat <<'EOF'
@@ -44,149 +28,46 @@ Commands:
                      link/copy files listed in manifest.tsv
   pull               git pull this repo, then sync (copies and git entries updated)
   sync               apply manifest.tsv again without pulling
-  agent [name...]    install ACP agents: claude codex cursor antigravity opencode
-                     no names: ask for each missing agent; names: install/upgrade them
-  lsp [lang...]      install LSP servers: python web c rust lisp php
-                     no names: ask for each missing one; names: install/upgrade them
-                     python/web/php go into .venv, node_modules, vendor of the
-                     checkout (or $LYANEMACS_DIR when piped without one)
+  lang [name...]     run lang.sh:  python3 + pip + venv, nvm + Node.js, rust
+  agent [name...]    run agent.sh: ACP agents claude codex cursor antigravity opencode
+  lsp [lang...]      run lsp.sh:   LSP servers python web c rust lisp php
 
-agent and lsp work without a checkout, e.g. on a TRAMP remote host.
+lang, agent and lsp need no checkout (e.g. on a TRAMP remote host); see
+`setup.sh <command> -h` for their own options.
 
 Options:
   -y, --yes          answer yes to every prompt (replaced files are still backed up)
   -h, --help         show this help
 
 Environment:
-  LYANEMACS_DIR      checkout used when piped from curl, and where `lsp` installs
-                     without a checkout (default ~/repos/lyanemacs)
+  LYANEMACS_DIR      checkout used when piped from curl (default ~/repos/lyanemacs)
   LYANEMACS_REPO     git URL to clone (default https://github.com/lyanchih/lyanemacs.git)
+  LYANEMACS_SITE     where piped scripts download their siblings
+                     (default https://lyanemacs.qiyecaotw.net)
 EOF
 }
 
-# ---------------------------------------------------------------- helpers
-
-log()  { printf '\033[1;34m==>\033[0m %s\n' "$*"; }
-ok()   { printf '\033[1;32m ok\033[0m %s\n' "$*"; }
-warn() { printf '\033[1;33m !!\033[0m %s\n' "$*" >&2; }
-die()  { printf '\033[1;31mxxx\033[0m %s\n' "$*" >&2; exit 1; }
-
-have() { command -v "$1" >/dev/null 2>&1; }
-
-has_tty() { { : </dev/tty; } 2>/dev/null; }
-
-# ask QUESTION [y|n]: prompt on the terminal, since stdin may be the curl pipe.
-# Without a terminal (and without --yes) the answer is always no.
-ask() {
-  local question=$1 default=${2:-n} hint reply
-  if [[ $default == y ]]; then hint='[Y/n]'; else hint='[y/N]'; fi
-  if ((ASSUME_YES)); then
-    printf '%s %s y (--yes)\n' "$question" "$hint"
-    return 0
+# Load common.sh from next to this script, or download it when piped from curl.
+load_common() {
+  local src=${BASH_SOURCE[0]:-} dir
+  if [[ -f $src && -f $(dirname "$src")/common.sh ]]; then
+    dir=$(dirname "$src")
+  else
+    dir=$(mktemp -d)
+    COMMON_TMP=$dir
+    trap 'rm -rf "$COMMON_TMP"' EXIT
+    curl -fsSL "${LYANEMACS_SITE:-https://lyanemacs.qiyecaotw.net}/scripts/common.sh" -o "$dir/common.sh" || {
+      echo "xxx Cannot download common.sh" >&2
+      exit 1
+    }
   fi
-  if ! has_tty; then
-    printf '%s %s n (no terminal)\n' "$question" "$hint"
-    return 1
-  fi
-  while :; do
-    printf '%s %s ' "$question" "$hint" >/dev/tty
-    IFS= read -r reply </dev/tty || reply=
-    case ${reply:-$default} in
-      [Yy] | [Yy][Ee][Ss]) return 0 ;;
-      [Nn] | [Nn][Oo]) return 1 ;;
-    esac
-  done
-}
-
-as_root() {
-  if ((EUID == 0)); then "$@"; else sudo "$@"; fi
-}
-
-apt_install() {
-  have apt-get || die "apt-get not found; install manually: $*"
-  log "apt install $*"
-  as_root apt-get install -y "$@"
-}
-
-# need COMMAND [APT_PACKAGE]
-need() {
-  have "$1" || apt_install "${2:-$1}"
-}
-
-backup() {
-  local path=$1 dest
-  dest="$path.bak.$(date +%Y%m%d-%H%M%S)"
-  mv -- "$path" "$dest"
-  log "Backed up $path -> $dest"
+  # shellcheck source=common.sh
+  . "$dir/common.sh"
 }
 
 sha() { sha256sum -- "$1" | cut -d' ' -f1; }
 
-# Tools installed per user are often missing from PATH in a non-login shell.
-setup_path() {
-  local dir
-  for dir in /snap/bin "$HOME/.opencode/bin" "$HOME/.cargo/bin" "$HOME/.local/bin"; do
-    [[ -d $dir && :$PATH: != *:$dir:* ]] && PATH="$dir:$PATH"
-  done
-  export PATH
-  load_nvm || true
-}
-
-load_nvm() {
-  export NVM_DIR=${NVM_DIR:-$HOME/.nvm}
-  [[ -s $NVM_DIR/nvm.sh ]] || return 1
-  set +u
-  # shellcheck disable=SC1091
-  . "$NVM_DIR/nvm.sh"
-  set -u
-}
-
-ensure_node() {
-  have npm && return
-  ask "Node.js not found. Install nvm + Node.js LTS?" y || die "Node.js is required"
-  curl -fsSL https://raw.githubusercontent.com/nvm-sh/nvm/v0.40.3/install.sh | bash
-  load_nvm || die "nvm install failed"
-  set +u
-  nvm install --lts
-  set -u
-}
-
-# npm_global PACKAGE: global install, with sudo only when the prefix needs it.
-npm_global() {
-  ensure_node
-  if [[ -w $(npm prefix -g) ]]; then
-    npm install -g --no-fund --no-audit "$@"
-  else
-    as_root npm install -g --no-fund --no-audit "$@"
-  fi
-}
-
-# write_wrapper PATH TARGET: tiny exec script, used to put a binary on PATH
-# while it keeps finding the files next to it.
-write_wrapper() {
-  local path=$1 target=$2
-  if [[ -e $path || -L $path ]] && ! grep -qs "$WRAPPER_MARKER" "$path"; then
-    ask "$path exists and is not managed by lyanemacs. Replace it (backup kept)?" n || {
-      warn "Kept $path"
-      return
-    }
-    backup "$path"
-  fi
-  mkdir -p "$(dirname "$path")"
-  printf '#!/bin/sh\n%s\nexec "%s" "$@"\n' "$WRAPPER_MARKER" "$target" >"$path"
-  chmod +x "$path"
-}
-
 # ---------------------------------------------------------------- bootstrap
-
-# Print the checkout this script lives in, if it was run from a file.
-script_repo() {
-  local src=${BASH_SOURCE[0]:-} dir
-  [[ -n $src && -f $src ]] || return 1
-  dir=$(cd "$(dirname "$src")/.." && pwd -P)
-  [[ -f $dir/manifest.tsv && -d $dir/lisp ]] || return 1
-  printf '%s\n' "$dir"
-}
 
 # github.com/owner/name for https, ssh and scp-style git URLs.
 normalize_url() {
@@ -227,7 +108,8 @@ bootstrap() {
     mkdir -p "$(dirname "$LYANEMACS_DIR")"
     git clone "$LYANEMACS_REPO" "$LYANEMACS_DIR"
   fi
-  exec bash "$LYANEMACS_DIR/scripts/setup.sh" "$@"
+  [[ -z ${COMMON_TMP:-} ]] || rm -rf "$COMMON_TMP"
+  exec bash "$LYANEMACS_DIR/scripts/setup.sh" ${FLAGS[@]+"${FLAGS[@]}"} "$@"
 }
 
 # ---------------------------------------------------------------- emacs
@@ -415,228 +297,6 @@ sync_files() {
   save_state
 }
 
-# ---------------------------------------------------------------- agents
-
-agent_name() {
-  case $1 in
-    claude | claude-acp | claude-agent-acp) echo claude ;;
-    codex | codex-acp) echo codex ;;
-    cursor | cursor-agent) echo cursor ;;
-    antigravity | agy | antigravity-acp) echo antigravity ;;
-    opencode) echo opencode ;;
-    *) return 1 ;;
-  esac
-}
-
-agent_installed() {
-  case $1 in
-    claude) have claude-agent-acp ;;
-    codex) have codex-acp ;;
-    cursor) have cursor-agent ;;
-    antigravity) have agy_acp_server.par ;;
-    opencode) have opencode ;;
-  esac
-}
-
-agent_hint() {
-  case $1 in
-    claude) echo "log in with the claude CLI or set ANTHROPIC_API_KEY" ;;
-    codex) echo "agent-shell asks to log in on first use" ;;
-    cursor) echo "run 'cursor-agent login' once" ;;
-    antigravity) echo "agent-shell asks to log in on first use" ;;
-    opencode) echo "run 'opencode auth login' once" ;;
-  esac
-}
-
-install_agent_claude() { npm_global @agentclientprotocol/claude-agent-acp@latest; }
-install_agent_codex() { npm_global @agentclientprotocol/codex-acp@latest; }
-
-install_agent_cursor() {
-  need curl
-  curl -fsSL https://cursor.com/install | bash
-}
-
-install_agent_opencode() {
-  need curl
-  curl -fsSL https://opencode.ai/install | bash
-}
-
-# Same location as `agent-shell-antigravity-bootstrap' in init.el, plus a
-# wrapper in ~/.local/bin so the default `agy_acp_server.par' command resolves.
-install_agent_antigravity() {
-  local upgrade=$1 os arch platform dir tmp version url sum
-  need curl
-  need unzip
-  need python3
-  os=$(uname -s | tr '[:upper:]' '[:lower:]')
-  case $(uname -m) in
-    x86_64 | amd64) arch=x86_64 ;;
-    aarch64 | arm64) arch=aarch64 ;;
-    *) die "Antigravity: unsupported architecture $(uname -m)" ;;
-  esac
-  platform=$os-$arch
-  dir=${XDG_CACHE_HOME:-$HOME/.cache}/agent-shell/antigravity/$platform
-
-  if [[ -x $dir/agy_acp_server.par ]] && ! ((upgrade)); then
-    ok "Antigravity server already in $dir"
-  else
-    tmp=$(mktemp -d)
-    curl -fsSL "$ACP_REGISTRY/antigravity-acp/agent.json" -o "$tmp/agent.json"
-    read -r version url sum < <(python3 -c '
-import json, sys
-d = json.load(open(sys.argv[1]))
-b = d["distribution"]["binary"][sys.argv[2]]
-print(d["version"], b["archive"], b.get("sha256", "-"))' "$tmp/agent.json" "$platform") ||
-      die "Antigravity: no $platform build in the ACP registry"
-    if [[ -x $dir/agy_acp_server.par && $(cat "$dir/.version" 2>/dev/null) == "$version" ]]; then
-      ok "Antigravity server $version is current"
-    else
-      log "Downloading Antigravity ACP server $version"
-      curl -fL --progress-bar "$url" -o "$tmp/server.zip"
-      if [[ $sum != - ]]; then
-        echo "$sum  $tmp/server.zip" | sha256sum -c --quiet - || die "Antigravity: checksum mismatch"
-      fi
-      rm -rf "$dir.new"
-      mkdir -p "$dir.new"
-      unzip -q -o "$tmp/server.zip" -d "$dir.new"
-      chmod +x "$dir.new/agy_acp_server.par"
-      echo "$version" >"$dir.new/.version"
-      rm -rf "$dir"
-      mv "$dir.new" "$dir"
-    fi
-    rm -rf "$tmp"
-  fi
-  write_wrapper "$HOME/.local/bin/agy_acp_server.par" "$dir/agy_acp_server.par"
-}
-
-cmd_agent() {
-  local name arg upgrade=0
-  local -a chosen=()
-  for arg in "$@"; do
-    name=$(agent_name "$arg") || die "Unknown agent '$arg' (known: ${AGENTS[*]})"
-    chosen+=("$name")
-  done
-  if ((${#chosen[@]})); then upgrade=1; else chosen=("${AGENTS[@]}"); fi
-
-  for name in "${chosen[@]}"; do
-    if ! ((upgrade)) && agent_installed "$name"; then
-      ok "$name installed"
-      continue
-    fi
-    if ! ((upgrade)); then
-      ask "Install $name?" n || {
-        log "Skipped $name"
-        continue
-      }
-    fi
-    log "Installing $name"
-    if [[ $name == antigravity ]]; then
-      install_agent_antigravity "$upgrade"
-    else
-      "install_agent_$name"
-    fi
-    setup_path
-    if agent_installed "$name"; then
-      ok "$name installed; $(agent_hint "$name")"
-    else
-      warn "$name installed but not on PATH yet; open a new shell"
-    fi
-  done
-}
-
-# ---------------------------------------------------------------- lsp
-
-lang_name() {
-  case $1 in
-    python | py | pylsp) echo python ;;
-    web | html | js | ts | javascript | typescript | css | json) echo web ;;
-    c | cpp | c++ | clangd) echo c ;;
-    rust | rs | rust-analyzer) echo rust ;;
-    lisp | cl | common-lisp | sbcl) echo lisp ;;
-    php | phpactor) echo php ;;
-    *) return 1 ;;
-  esac
-}
-
-lang_installed() {
-  case $1 in
-    python) [[ -x $TOOLS_DIR/.venv/bin/pylsp ]] ;;
-    web) [[ -x $TOOLS_DIR/node_modules/.bin/typescript-language-server &&
-      -x $TOOLS_DIR/node_modules/.bin/vscode-html-language-server ]] ;;
-    c) have clangd ;;
-    rust) rust-analyzer --version >/dev/null 2>&1 ;;
-    lisp) have sbcl ;;
-    php) [[ -x $TOOLS_DIR/vendor/bin/phpactor ]] ;;
-  esac
-}
-
-# pylsp in $TOOLS_DIR/.venv; a project's own .venv/bin still comes first in Emacs.
-install_lang_python() {
-  need python3
-  python3 -c 'import ensurepip' 2>/dev/null || apt_install python3-venv
-  mkdir -p "$TOOLS_DIR"
-  [[ -x $TOOLS_DIR/.venv/bin/python ]] || python3 -m venv "$TOOLS_DIR/.venv"
-  "$TOOLS_DIR/.venv/bin/pip" install --quiet --upgrade pip
-  "$TOOLS_DIR/.venv/bin/pip" install --upgrade "${PY_PACKAGES[@]}"
-}
-
-# typescript-language-server, vscode-langservers-extracted and prettier in
-# $TOOLS_DIR/node_modules.  Tree-sitter grammars are compiled on first start, so a
-# C compiler is needed too.
-install_lang_web() {
-  need cc build-essential
-  ensure_node
-  mkdir -p "$TOOLS_DIR"
-  npm install --prefix "$TOOLS_DIR" --no-fund --no-audit "${NPM_PACKAGES[@]/%/@latest}"
-}
-
-# Projects need compile_commands.json (cmake -DCMAKE_EXPORT_COMPILE_COMMANDS=ON,
-# or `bear -- make` for Makefile projects).
-install_lang_c() { apt_install clangd bear; }
-
-install_lang_rust() {
-  if ! have rustup; then
-    ask "rustup not found. Install it from https://sh.rustup.rs?" y || return 0
-    curl -fsSL https://sh.rustup.rs | sh -s -- -y
-    setup_path
-  fi
-  rustup component add rust-analyzer
-}
-
-install_lang_lisp() { apt_install sbcl; }
-
-install_lang_php() {
-  apt_install php-cli php-xml php-mbstring unzip composer
-  mkdir -p "$TOOLS_DIR"
-  composer require --no-interaction --working-dir="$TOOLS_DIR" "${COMPOSER_PACKAGES[@]}"
-}
-
-cmd_lsp() {
-  local name arg upgrade=0
-  local -a chosen=()
-  for arg in "$@"; do
-    name=$(lang_name "$arg") || die "Unknown language '$arg' (known: ${LANGS[*]})"
-    chosen+=("$name")
-  done
-  if ((${#chosen[@]})); then upgrade=1; else chosen=("${LANGS[@]}"); fi
-
-  for name in "${chosen[@]}"; do
-    if ! ((upgrade)) && lang_installed "$name"; then
-      ok "$name installed"
-      continue
-    fi
-    if ! ((upgrade)); then
-      ask "Install the $name language server?" n || {
-        log "Skipped $name"
-        continue
-      }
-    fi
-    log "Installing $name"
-    "install_lang_$name"
-    if lang_installed "$name"; then ok "$name installed"; else warn "$name is still not detected"; fi
-  done
-}
-
 # ---------------------------------------------------------------- commands
 
 cmd_install() {
@@ -648,6 +308,7 @@ cmd_install() {
   cat <<EOF
 
 Done.  Next:
+  $REPO/scripts/setup.sh lang    # python3, Node.js (nvm), rust
   $REPO/scripts/setup.sh agent   # ACP agents for agent-shell
   $REPO/scripts/setup.sh lsp     # language servers for eglot
   emacs                          # first start installs the Emacs packages
@@ -672,40 +333,48 @@ cmd_sync() {
   sync_files "$update"
 }
 
+# lang / agent / lsp live in their own scripts; hand them every other argument,
+# so `setup.sh agent -h` shows agent.sh's help.
+delegate() {
+  local cmd=$1 arg seen=0
+  local -a rest=()
+  shift
+  for arg in "$@"; do
+    if ((!seen)) && [[ $arg == "$cmd" ]]; then
+      seen=1
+      continue
+    fi
+    rest+=("$arg")
+  done
+  run_script "$cmd.sh" ${rest[@]+"${rest[@]}"}
+  exit
+}
+
 main() {
-  local -a args=()
+  load_common
   local arg
   for arg in "$@"; do
-    case $arg in
-      -y | --yes)
-        ASSUME_YES=1
-        FLAGS+=("$arg")
-        ;;
-      -h | --help) usage; exit 0 ;;
-      *) args+=("$arg") ;;
-    esac
+    [[ $arg == -* ]] && continue
+    case $arg in lang | agent | lsp) delegate "$arg" "$@" ;; esac
+    break
   done
-  set -- ${args[@]+"${args[@]}"}
 
+  parse_args "$@"
+  set -- ${ARGS[@]+"${ARGS[@]}"}
   local cmd=${1:-install}
-  if ! REPO=$(script_repo); then
-    REPO=
-    case $cmd in
-      agent | lsp) ;;
-      *) bootstrap ${FLAGS[@]+"${FLAGS[@]}"} "$@" ;;
-    esac
-  fi
-  TOOLS_DIR=${REPO:-$LYANEMACS_DIR}
+  shift || true
+  case $cmd in
+    install | pull | sync) ;;
+    *) usage >&2; exit 1 ;;
+  esac
+  [[ -n $CHECKOUT ]] || bootstrap "$cmd" "$@"
+  REPO=$CHECKOUT
   setup_path
 
-  shift || true
   case $cmd in
     install) cmd_install ;;
     pull) cmd_pull ;;
     sync) cmd_sync "$@" ;;
-    agent) cmd_agent "$@" ;;
-    lsp) cmd_lsp "$@" ;;
-    *) usage >&2; exit 1 ;;
   esac
 }
 

@@ -11,3 +11,6 @@
 .agent-shell/
 
 *.elc
+
+# Claude Code
+.claude/scheduled_tasks.lock
