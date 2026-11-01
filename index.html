@@ -1,3 +1,7 @@
+---
+# Jekyll (GitHub Pages) fills in the deployed commit and build time below.
+layout: null
+---
 <!DOCTYPE html>
 <html lang="zh-Hant">
 <head>
@@ -5,6 +9,8 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>lyanemacs</title>
 <meta name="description" content="lyanemacs：Emacs 設定、ACP agents 與 LSP 安裝腳本">
+<meta name="lyanemacs-revision" content="{{ site.github.build_revision }}">
+<meta name="lyanemacs-built" content="{{ site.time | date: '%Y-%m-%d %H:%M' }}">
 <style>
   :root {
     --bg: #000; --panel: #111; --line: #2a2a2a; --fg: #e6e6e6; --dim: #9a9a9a;
@@ -27,6 +33,7 @@
   h1 { margin: 0; font: 600 28px var(--mono); }
   h2 { margin: 40px 0 12px; font-size: 18px; border-bottom: 1px solid var(--line); padding-bottom: 6px; }
   a { color: var(--accent); }
+  .version { margin-left: auto; font: 13px var(--mono); color: var(--dim); }
   .dim { color: var(--dim); }
   code { font-family: var(--mono); font-size: 0.92em; background: var(--code); padding: 1px 5px; border-radius: 4px; }
 
@@ -89,6 +96,7 @@
     <h1>lyanemacs</h1>
     <span class="dim">Emacs 設定、ACP agents 與 LSP 的安裝 / 同步腳本</span>
     <a href="https://github.com/lyanchih/lyanemacs">GitHub</a>
+    <a id="version" class="version" title="部署的 commit 與建置時間" hidden></a>
   </header>
 
   <h2>安裝</h2>
@@ -159,8 +167,18 @@
 (() => {
   const SITE = /^https?:$/.test(location.protocol) ? location.origin : "https://lyanemacs.qiyecaotw.net";
   const SETUP = `curl -fsSL ${SITE}/scripts/setup.sh | bash`;
-  const GITHUB = "https://github.com/lyanchih/lyanemacs/blob/master/";
   const $ = (sel, root = document) => root.querySelector(sel);
+
+  // Version of this deploy; the meta tags stay unexpanded outside Jekyll.
+  const meta = (name) => $(`meta[name="${name}"]`).content;
+  const revision = /^[0-9a-f]{40}$/.test(meta("lyanemacs-revision")) ? meta("lyanemacs-revision") : "";
+  if (revision) {
+    const version = $("#version");
+    version.textContent = `${revision.slice(0, 7)} · ${meta("lyanemacs-built")}`;
+    version.href = `https://github.com/lyanchih/lyanemacs/commit/${revision}`;
+    version.hidden = false;
+  }
+  const GITHUB = `https://github.com/lyanchih/lyanemacs/blob/${revision || "master"}/`;
 
   const command = (args) => args ? `${SETUP} -s -- ${args}` : SETUP;
   document.querySelectorAll("pre[data-args]").forEach((pre) => {

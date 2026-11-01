@@ -136,3 +136,7 @@ repo 根目錄的 `CNAME` 是 `lyanemacs.qiyecaotw.net`。在 repo Settings → 
 首頁 `index.html` 是純靜態頁面：提供各指令 (可勾選語言環境 / agent / LSP) 與複製按鈕，
 並依 `manifest.tsv` 列出檔案、點檔名即可在頁面中檢視。可勾選的名稱讀自
 `lang.sh` 的 `RUNTIMES`、`agent.sh` 的 `AGENTS`、`lsp.sh` 的 `LANGS`，新增項目不需改頁面。
+
+頁首右上角顯示部署版本 (commit 短碼 · 建置時間，連到該 commit)，由 GitHub Pages
+的 Jekyll 在每次部署時自動填入 (`index.html` 的 front matter、`_config.yml` 設定台北時區)，
+不需手動更新；檔案檢視的 GitHub 連結也指向同一個 commit。
