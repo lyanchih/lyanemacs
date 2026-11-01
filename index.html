@@ -1,0 +1,266 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>lyanemacs</title>
+<meta name="description" content="lyanemacs：Emacs 設定、ACP agents 與 LSP 安裝腳本">
+<style>
+  :root {
+    --bg: #000; --panel: #111; --line: #2a2a2a; --fg: #e6e6e6; --dim: #9a9a9a;
+    --accent: #79a8ff; --ok: #44bc44; --warn: #d0bc00; --code: #1a1a1a;
+    --mono: ui-monospace, "JetBrains Mono", "Cascadia Code", Menlo, Consolas, monospace;
+  }
+  @media (prefers-color-scheme: light) {
+    :root {
+      --bg: #fff; --panel: #f6f6f6; --line: #dcdcdc; --fg: #111; --dim: #595959;
+      --accent: #3548cf; --ok: #006800; --warn: #6f5500; --code: #efefef;
+    }
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; background: var(--bg); color: var(--fg);
+    font: 15px/1.6 system-ui, -apple-system, "Noto Sans TC", "PingFang TC", sans-serif;
+  }
+  main { max-width: 960px; margin: 0 auto; padding: 32px 20px 64px; }
+  header { display: flex; align-items: baseline; gap: 16px; flex-wrap: wrap; }
+  h1 { margin: 0; font: 600 28px var(--mono); }
+  h2 { margin: 40px 0 12px; font-size: 18px; border-bottom: 1px solid var(--line); padding-bottom: 6px; }
+  a { color: var(--accent); }
+  .dim { color: var(--dim); }
+  code { font-family: var(--mono); font-size: 0.92em; background: var(--code); padding: 1px 5px; border-radius: 4px; }
+
+  .cmd { margin: 14px 0; }
+  .cmd h3 { margin: 0 0 4px; font-size: 15px; }
+  .cmd p { margin: 0 0 6px; }
+  .shell {
+    display: flex; align-items: stretch; background: var(--panel);
+    border: 1px solid var(--line); border-radius: 6px; overflow: hidden;
+  }
+  .shell pre {
+    flex: 1; margin: 0; padding: 10px 12px; overflow-x: auto;
+    font: 13.5px/1.5 var(--mono); white-space: pre;
+  }
+  .shell pre::before { content: "$ "; color: var(--dim); }
+  button {
+    font: inherit; color: var(--fg); background: transparent; cursor: pointer;
+    border: 0; border-left: 1px solid var(--line); padding: 0 14px; min-width: 64px;
+  }
+  button:hover { background: var(--code); }
+  button.done { color: var(--ok); }
+
+  .chips { display: flex; flex-wrap: wrap; gap: 6px; margin: 6px 0 8px; }
+  .chips label {
+    display: inline-flex; align-items: center; gap: 6px; cursor: pointer; user-select: none;
+    border: 1px solid var(--line); border-radius: 999px; padding: 2px 12px 2px 8px;
+    font: 13px var(--mono);
+  }
+  .chips input { accent-color: var(--accent); margin: 0; }
+  .chips label:has(input:checked) { border-color: var(--accent); }
+
+  table { width: 100%; border-collapse: collapse; font-size: 14px; }
+  th, td { text-align: left; padding: 6px 8px; border-bottom: 1px solid var(--line); vertical-align: top; }
+  th { color: var(--dim); font-weight: 500; }
+  td.path { font-family: var(--mono); font-size: 13px; word-break: break-all; }
+  .type { font: 12px var(--mono); padding: 1px 8px; border-radius: 4px; border: 1px solid var(--line); }
+  .type.link { color: var(--accent); }
+  .type.copy { color: var(--ok); }
+  .type.git { color: var(--warn); }
+  a.file { cursor: pointer; }
+
+  #viewer { margin-top: 16px; border: 1px solid var(--line); border-radius: 6px; overflow: hidden; }
+  #viewer[hidden] { display: none; }
+  #viewer .bar {
+    display: flex; align-items: center; gap: 12px; background: var(--panel);
+    padding: 6px 0 6px 12px; border-bottom: 1px solid var(--line); font: 13px var(--mono);
+  }
+  #viewer .bar .name { flex: 1; }
+  #viewer .bar button { padding: 4px 14px; }
+  #viewer pre {
+    margin: 0; padding: 12px; max-height: 70vh; overflow: auto;
+    font: 13px/1.5 var(--mono); tab-size: 8;
+  }
+  .error { color: #ff7f86; }
+</style>
+</head>
+<body>
+<main>
+  <header>
+    <h1>lyanemacs</h1>
+    <span class="dim">Emacs 設定、ACP agents 與 LSP 的安裝 / 同步腳本</span>
+    <a href="https://github.com/lyanchih/lyanemacs">GitHub</a>
+  </header>
+
+  <h2>安裝</h2>
+
+  <div class="cmd">
+    <h3>新電腦 / 初始化</h3>
+    <p class="dim">purge apt Emacs、安裝 snap Emacs 31+，clone repo 到 <code>~/repos/lyanemacs</code> 並 link / copy 設定檔。</p>
+    <div class="shell"><pre data-args=""></pre><button type="button">複製</button></div>
+  </div>
+
+  <div class="cmd">
+    <h3>同步最新設定</h3>
+    <p class="dim"><code>git pull</code> 後更新複製的檔案；symlink 不需處理。</p>
+    <div class="shell"><pre data-args="pull"></pre><button type="button">複製</button></div>
+  </div>
+
+  <div class="cmd">
+    <h3>ACP agents</h3>
+    <p class="dim">不需 clone repo。不勾選：沒裝的逐一詢問 y/N；勾選：直接安裝 / 升級。</p>
+    <div class="chips" id="agent-chips"></div>
+    <div class="shell"><pre id="agent-cmd" data-args="agent"></pre><button type="button">複製</button></div>
+  </div>
+
+  <div class="cmd">
+    <h3>LSP</h3>
+    <p class="dim">不需 clone repo；python / web / php 裝在 <code>~/repos/lyanemacs</code> 的 .venv、node_modules、vendor。</p>
+    <div class="chips" id="lsp-chips"></div>
+    <div class="shell"><pre id="lsp-cmd" data-args="lsp"></pre><button type="button">複製</button></div>
+  </div>
+
+  <p class="dim">加 <code>-y</code> 可略過所有提問 (被取代的檔案仍會備份)；
+    已有 checkout 時也可直接執行 <code>~/repos/lyanemacs/scripts/setup.sh &lt;command&gt;</code>。</p>
+
+  <h2>檔案</h2>
+  <p class="dim">依 <a class="file" data-path="manifest.tsv">manifest.tsv</a> 安裝到家目錄；點檔名可直接檢視。</p>
+  <table>
+    <thead><tr><th>方式</th><th>來源</th><th>安裝到</th></tr></thead>
+    <tbody id="files">
+      <tr><td></td><td class="path"><a class="file" data-path="scripts/setup.sh">scripts/setup.sh</a></td><td class="dim">安裝 / 同步腳本</td></tr>
+    </tbody>
+  </table>
+
+  <section id="viewer" hidden>
+    <div class="bar">
+      <span class="name"></span>
+      <a class="raw" target="_blank" rel="noopener">raw</a>
+      <a class="gh" target="_blank" rel="noopener">GitHub</a>
+      <button type="button" class="copy">複製內容</button>
+      <button type="button" class="close">關閉</button>
+    </div>
+    <pre></pre>
+  </section>
+</main>
+
+<script>
+(() => {
+  const SITE = /^https?:$/.test(location.protocol) ? location.origin : "https://lyanemacs.qiyecaotw.net";
+  const SETUP = `curl -fsSL ${SITE}/scripts/setup.sh | bash`;
+  const GITHUB = "https://github.com/lyanchih/lyanemacs/blob/master/";
+  const $ = (sel, root = document) => root.querySelector(sel);
+
+  const command = (args) => args ? `${SETUP} -s -- ${args}` : SETUP;
+  document.querySelectorAll("pre[data-args]").forEach((pre) => {
+    pre.textContent = command(pre.dataset.args);
+  });
+
+  async function copy(text, button) {
+    try {
+      await navigator.clipboard.writeText(text);
+      const label = button.textContent;
+      button.textContent = "已複製";
+      button.classList.add("done");
+      setTimeout(() => { button.textContent = label; button.classList.remove("done"); }, 1200);
+    } catch {
+      button.textContent = "請手動複製";
+    }
+  }
+  document.querySelectorAll(".shell button").forEach((button) => {
+    button.addEventListener("click", () => copy($("pre", button.parentElement).textContent, button));
+  });
+
+  // Agent / language names come from AGENTS=(...) and LANGS=(...) in setup.sh.
+  function chips(container, names, pre, subcommand) {
+    for (const name of names) {
+      const label = document.createElement("label");
+      const box = document.createElement("input");
+      box.type = "checkbox";
+      box.value = name;
+      label.append(box, name);
+      container.append(label);
+    }
+    container.addEventListener("change", () => {
+      const picked = [...container.querySelectorAll("input:checked")].map((box) => box.value);
+      pre.textContent = command([subcommand, ...picked].join(" "));
+    });
+  }
+  fetch("scripts/setup.sh").then((r) => r.ok ? r.text() : Promise.reject(r.status)).then((script) => {
+    const list = (name) => (script.match(new RegExp(`^${name}=\\(([^)]*)\\)`, "m")) || [, ""])[1].trim().split(/\s+/).filter(Boolean);
+    chips($("#agent-chips"), list("AGENTS"), $("#agent-cmd"), "agent");
+    chips($("#lsp-chips"), list("LANGS"), $("#lsp-cmd"), "lsp");
+  }).catch(() => {});
+
+  // File table from manifest.tsv.
+  const tbody = $("#files");
+  fetch("manifest.tsv").then((r) => r.ok ? r.text() : Promise.reject(r.status)).then((manifest) => {
+    for (const line of manifest.split("\n")) {
+      if (!line.trim() || line.trim().startsWith("#")) continue;
+      const [type, source, target] = line.trim().split(/\s+/);
+      const row = tbody.insertRow();
+      const badge = document.createElement("span");
+      badge.className = `type ${type}`;
+      badge.textContent = type;
+      row.insertCell().append(badge);
+      const src = row.insertCell();
+      src.className = "path";
+      const link = document.createElement("a");
+      link.textContent = source;
+      if (type === "git") {
+        link.href = source;
+        link.target = "_blank";
+        link.rel = "noopener";
+      } else {
+        link.className = "file";
+        link.dataset.path = source;
+      }
+      src.append(link);
+      const dst = row.insertCell();
+      dst.className = "path";
+      dst.textContent = target;
+    }
+  }).catch((status) => {
+    const cell = tbody.insertRow().insertCell();
+    cell.colSpan = 3;
+    cell.className = "error";
+    cell.textContent = `讀取 manifest.tsv 失敗 (${status})`;
+  });
+
+  // Viewer: .el is served as application/octet-stream, so show text in-page.
+  const viewer = $("#viewer");
+  const body = $("pre", viewer);
+  async function view(path) {
+    viewer.hidden = false;
+    $(".name", viewer).textContent = path;
+    $(".raw", viewer).href = path;
+    $(".gh", viewer).href = GITHUB + path;
+    body.classList.remove("error");
+    body.textContent = "載入中…";
+    try {
+      const response = await fetch(path);
+      if (!response.ok) throw new Error(response.status);
+      body.textContent = await response.text();
+    } catch (error) {
+      body.classList.add("error");
+      body.textContent = `讀取 ${path} 失敗 (${error.message})`;
+    }
+    history.replaceState(null, "", `#${path}`);
+    viewer.scrollIntoView({ behavior: "smooth", block: "start" });
+  }
+  document.addEventListener("click", (event) => {
+    const link = event.target.closest("a.file");
+    if (!link) return;
+    event.preventDefault();
+    view(link.dataset.path);
+  });
+  $(".copy", viewer).addEventListener("click", (event) => copy(body.textContent, event.currentTarget));
+  $(".close", viewer).addEventListener("click", () => {
+    viewer.hidden = true;
+    history.replaceState(null, "", location.pathname);
+  });
+  const initial = decodeURIComponent(location.hash.slice(1));
+  if (/^[\w./-]+$/.test(initial) && !initial.includes("..")) view(initial);
+})();
+</script>
+</body>
+</html>

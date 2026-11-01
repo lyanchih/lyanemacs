@@ -107,3 +107,7 @@ init.el 會把 repo 的 `.venv/bin`、`node_modules/.bin`、`vendor/bin` 加進
 
 repo 根目錄的 `CNAME` 是 `lyanemacs.qiyecaotw.net`。在 repo Settings → Pages 從
 `master` 分支發佈，並在 DNS 加一筆 `lyanemacs` CNAME → `lyanchih.github.io`。
+
+首頁 `index.html` 是純靜態頁面：提供各指令 (可勾選 agent / LSP) 與複製按鈕，
+並依 `manifest.tsv` 列出檔案、點檔名即可在頁面中檢視。agent / LSP 名稱讀自
+`scripts/setup.sh` 的 `AGENTS`、`LANGS`，新增項目不需改頁面。
