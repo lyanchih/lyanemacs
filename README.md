@@ -14,8 +14,8 @@ curl -fsSL https://lyanemacs.qiyecaotw.net/scripts/setup.sh | bash
 curl -fsSL https://lyanemacs.qiyecaotw.net/scripts/setup.sh | bash -s -- pull
 
 # ACP agents：沒裝的逐一詢問 y/N；指定名稱則直接安裝 / 升級
-curl -fsSL https://lyanemacs.qiyecaotw.net/scripts/setup.sh | bash -s -- agents
-curl -fsSL https://lyanemacs.qiyecaotw.net/scripts/setup.sh | bash -s -- agents claude codex
+curl -fsSL https://lyanemacs.qiyecaotw.net/scripts/setup.sh | bash -s -- agent
+curl -fsSL https://lyanemacs.qiyecaotw.net/scripts/setup.sh | bash -s -- agent claude codex
 
 # LSP：同上
 curl -fsSL https://lyanemacs.qiyecaotw.net/scripts/setup.sh | bash -s -- lsp
@@ -25,19 +25,22 @@ curl -fsSL https://lyanemacs.qiyecaotw.net/scripts/setup.sh | bash -s -- lsp pyt
 > 經 pipe 傳參數要用 `bash -s -- <args>`；`bash -- pull` 會把 `pull` 當成腳本檔名。
 
 已經有 checkout 時直接跑 `scripts/setup.sh <command>` 即可。
-從 curl 執行時，腳本會 clone (或沿用) `~/repos/lyanemacs`，
+從 curl 執行 `install` / `pull` / `sync` 時，腳本會 clone (或沿用) `~/repos/lyanemacs`，
 再執行那份 checkout 裡的 `scripts/setup.sh`，所以兩種方式行為相同。
+`agent` / `lsp` 不需要 checkout，直接從 pipe 執行，適合只需要 agent / LSP 的
+TRAMP 遠端主機。
 
 | 指令 | 說明 |
 | --- | --- |
 | `install` (預設) | purge apt Emacs (v29)、安裝 snap Emacs 31+、套用 `manifest.tsv` |
 | `pull` | `git pull --ff-only`，再以新版腳本執行 `sync --update` |
 | `sync` | 只重新套用 `manifest.tsv` (改了 `lisp/*.el` 之後用) |
-| `agents [name...]` | `claude` `codex` `cursor` `antigravity` `opencode` |
+| `agent [name...]` | `claude` `codex` `cursor` `antigravity` `opencode` |
 | `lsp [lang...]` | `python` `web` (html/js/ts/css/json) `c` (c/c++) `rust` `lisp` `php` |
 
 選項：`-y` / `--yes` 所有提問都回答 yes (被取代的檔案仍會備份)。
-環境變數：`LYANEMACS_DIR` (checkout 位置)、`LYANEMACS_REPO` (git URL)。
+環境變數：`LYANEMACS_DIR` (checkout 位置，沒有 checkout 時也是 `lsp` 的安裝位置)、
+`LYANEMACS_REPO` (git URL)。
 
 ## 目錄
 
@@ -45,8 +48,6 @@ curl -fsSL https://lyanemacs.qiyecaotw.net/scripts/setup.sh | bash -s -- lsp pyt
 lisp/             所有 Emacs Lisp，包括 init.el
 scripts/setup.sh  安裝 / 同步腳本
 manifest.tsv      哪些檔案 link、哪些 copy、哪些 git clone
-requirements.txt / package.json / composer.json
-                  `setup.sh lsp` 裝在本 repo 的 .venv / node_modules / vendor
 ```
 
 ## manifest.tsv 與覆寫防呆
@@ -73,7 +74,7 @@ Emacs 忽略 `~/.emacs.d/init.el`，`install` 會提示移開。
 | antigravity | ACP registry 的 binary，驗 sha256 | `~/.cache/agent-shell/antigravity/<platform>`，wrapper 在 `~/.local/bin/agy_acp_server.par` |
 | opencode | `curl https://opencode.ai/install \| bash` | `~/.opencode/bin` |
 
-TRAMP 遠端要用 agent 時，在遠端主機上也跑一次 `setup.sh agents`。
+TRAMP 遠端要用 agent 時，在遠端主機上也跑一次 `setup.sh agent` (不需 clone repo)。
 
 ## LSP
 
@@ -86,7 +87,13 @@ TRAMP 遠端要用 agent 時，在遠端主機上也跑一次 `setup.sh agents`�
 | lisp | sbcl (搭配 SLY) | apt |
 | php | phpactor | repo `vendor` |
 
-init.el 會把 repo 的 `.venv/bin`、`node_modules/.bin`、`vendor/bin` 加進 `exec-path`。
+「repo」指執行腳本的 checkout；從 curl 執行且沒有 checkout 時，裝在
+`$LYANEMACS_DIR` (預設 `~/repos/lyanemacs`)，之後 `install` 會直接在該目錄
+clone repo 並保留已安裝的工具。套件清單寫在 `scripts/setup.sh` 的
+`PY_PACKAGES`、`NPM_PACKAGES`、`COMPOSER_PACKAGES`。
+
+init.el 會把 repo 的 `.venv/bin`、`node_modules/.bin`、`vendor/bin` 加進
+`exec-path`；TRAMP 遠端則找 `~/repos/lyanemacs` 下的同樣路徑。
 
 新增語言：在 `scripts/setup.sh` 加 `install_lang_<name>`，並更新 `LANGS`、
 `lang_name`、`lang_installed`。

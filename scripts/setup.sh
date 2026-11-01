@@ -3,12 +3,13 @@
 #
 #   curl -fsSL https://lyanemacs.qiyecaotw.net/scripts/setup.sh | bash
 #   curl -fsSL https://lyanemacs.qiyecaotw.net/scripts/setup.sh | bash -s -- pull
-#   curl -fsSL https://lyanemacs.qiyecaotw.net/scripts/setup.sh | bash -s -- agents [name...]
+#   curl -fsSL https://lyanemacs.qiyecaotw.net/scripts/setup.sh | bash -s -- agent [name...]
 #   curl -fsSL https://lyanemacs.qiyecaotw.net/scripts/setup.sh | bash -s -- lsp [lang...]
 #   scripts/setup.sh <command>                         (from a checkout)
 #
-# Piped from curl, the script clones (or reuses) $LYANEMACS_DIR and re-runs
-# that checkout's copy of itself, so both ways behave the same.
+# Piped from curl, install / pull / sync clone (or reuse) $LYANEMACS_DIR and
+# re-run that checkout's copy of the script, so both ways behave the same.
+# agent and lsp need no checkout and run straight from the pipe.
 
 set -euo pipefail
 
@@ -20,6 +21,16 @@ WRAPPER_MARKER='# managed by lyanemacs'
 
 AGENTS=(claude codex cursor antigravity opencode)
 LANGS=(python web c rust lisp php)
+
+# Repo-local LSP packages, installed into $TOOLS_DIR by `lsp`.
+PY_PACKAGES=('python-lsp-server[all]')
+NPM_PACKAGES=(typescript typescript-language-server vscode-langservers-extracted prettier)
+COMPOSER_PACKAGES=(phpactor/phpactor)
+# What `lsp` may leave in $LYANEMACS_DIR before the repo is cloned there.
+TOOL_ENTRIES=(.venv node_modules vendor package.json package-lock.json composer.json composer.lock)
+
+REPO=      # checkout this script runs from; empty when piped without one
+TOOLS_DIR= # where `lsp` installs: the checkout, else $LYANEMACS_DIR
 
 ASSUME_YES=0
 FLAGS=()
@@ -33,17 +44,22 @@ Commands:
                      link/copy files listed in manifest.tsv
   pull               git pull this repo, then sync (copies and git entries updated)
   sync               apply manifest.tsv again without pulling
-  agents [name...]   install ACP agents: claude codex cursor antigravity opencode
+  agent [name...]    install ACP agents: claude codex cursor antigravity opencode
                      no names: ask for each missing agent; names: install/upgrade them
   lsp [lang...]      install LSP servers: python web c rust lisp php
                      no names: ask for each missing one; names: install/upgrade them
+                     python/web/php go into .venv, node_modules, vendor of the
+                     checkout (or $LYANEMACS_DIR when piped without one)
+
+agent and lsp work without a checkout, e.g. on a TRAMP remote host.
 
 Options:
   -y, --yes          answer yes to every prompt (replaced files are still backed up)
   -h, --help         show this help
 
 Environment:
-  LYANEMACS_DIR      checkout used when piped from curl (default ~/repos/lyanemacs)
+  LYANEMACS_DIR      checkout used when piped from curl, and where `lsp` installs
+                     without a checkout (default ~/repos/lyanemacs)
   LYANEMACS_REPO     git URL to clone (default https://github.com/lyanchih/lyanemacs.git)
 EOF
 }
@@ -177,6 +193,16 @@ normalize_url() {
   sed -E 's#^[a-z+]+://##; s#^[^@/]+@##; s#:#/#; s#\.git$##; s#/$##' <<<"$1"
 }
 
+only_tool_entries() {
+  local entry known
+  while IFS= read -r entry; do
+    for known in "${TOOL_ENTRIES[@]}"; do
+      [[ $entry == "$known" ]] && continue 2
+    done
+    return 1
+  done < <(ls -A "$1")
+}
+
 bootstrap() {
   need git
   if [[ -d $LYANEMACS_DIR/.git ]]; then
@@ -186,7 +212,16 @@ bootstrap() {
       die "$LYANEMACS_DIR is a checkout of '${remote:-no origin}', not $LYANEMACS_REPO; set LYANEMACS_DIR to another path"
     log "Using checkout $LYANEMACS_DIR"
   elif [[ -e $LYANEMACS_DIR && -n $(ls -A "$LYANEMACS_DIR" 2>/dev/null) ]]; then
-    die "$LYANEMACS_DIR exists and is not a lyanemacs checkout; set LYANEMACS_DIR to another path"
+    only_tool_entries "$LYANEMACS_DIR" ||
+      die "$LYANEMACS_DIR exists and is not a lyanemacs checkout; set LYANEMACS_DIR to another path"
+    # `lsp` ran here before the clone; check the repo out around its tools.
+    log "Cloning $LYANEMACS_REPO into $LYANEMACS_DIR (keeping installed LSP tools)"
+    local tmp
+    tmp=$(mktemp -d)
+    git clone --no-checkout "$LYANEMACS_REPO" "$tmp/repo"
+    mv "$tmp/repo/.git" "$LYANEMACS_DIR/.git"
+    rm -rf "$tmp"
+    git -C "$LYANEMACS_DIR" reset --quiet --hard
   else
     log "Cloning $LYANEMACS_REPO -> $LYANEMACS_DIR"
     mkdir -p "$(dirname "$LYANEMACS_DIR")"
@@ -474,7 +509,7 @@ print(d["version"], b["archive"], b.get("sha256", "-"))' "$tmp/agent.json" "$pla
   write_wrapper "$HOME/.local/bin/agy_acp_server.par" "$dir/agy_acp_server.par"
 }
 
-cmd_agents() {
+cmd_agent() {
   local name arg upgrade=0
   local -a chosen=()
   for arg in "$@"; do
@@ -525,32 +560,34 @@ lang_name() {
 
 lang_installed() {
   case $1 in
-    python) [[ -x $REPO/.venv/bin/pylsp ]] ;;
-    web) [[ -x $REPO/node_modules/.bin/typescript-language-server &&
-      -x $REPO/node_modules/.bin/vscode-html-language-server ]] ;;
+    python) [[ -x $TOOLS_DIR/.venv/bin/pylsp ]] ;;
+    web) [[ -x $TOOLS_DIR/node_modules/.bin/typescript-language-server &&
+      -x $TOOLS_DIR/node_modules/.bin/vscode-html-language-server ]] ;;
     c) have clangd ;;
     rust) rust-analyzer --version >/dev/null 2>&1 ;;
     lisp) have sbcl ;;
-    php) [[ -x $REPO/vendor/bin/phpactor ]] ;;
+    php) [[ -x $TOOLS_DIR/vendor/bin/phpactor ]] ;;
   esac
 }
 
-# pylsp in $REPO/.venv; a project's own .venv/bin still comes first in Emacs.
+# pylsp in $TOOLS_DIR/.venv; a project's own .venv/bin still comes first in Emacs.
 install_lang_python() {
   need python3
   python3 -c 'import ensurepip' 2>/dev/null || apt_install python3-venv
-  [[ -x $REPO/.venv/bin/python ]] || python3 -m venv "$REPO/.venv"
-  "$REPO/.venv/bin/pip" install --quiet --upgrade pip
-  "$REPO/.venv/bin/pip" install --upgrade -r "$REPO/requirements.txt"
+  mkdir -p "$TOOLS_DIR"
+  [[ -x $TOOLS_DIR/.venv/bin/python ]] || python3 -m venv "$TOOLS_DIR/.venv"
+  "$TOOLS_DIR/.venv/bin/pip" install --quiet --upgrade pip
+  "$TOOLS_DIR/.venv/bin/pip" install --upgrade "${PY_PACKAGES[@]}"
 }
 
 # typescript-language-server, vscode-langservers-extracted and prettier in
-# $REPO/node_modules.  Tree-sitter grammars are compiled on first start, so a
+# $TOOLS_DIR/node_modules.  Tree-sitter grammars are compiled on first start, so a
 # C compiler is needed too.
 install_lang_web() {
   need cc build-essential
   ensure_node
-  (cd "$REPO" && npm install --no-fund --no-audit)
+  mkdir -p "$TOOLS_DIR"
+  npm install --prefix "$TOOLS_DIR" --no-fund --no-audit "${NPM_PACKAGES[@]/%/@latest}"
 }
 
 # Projects need compile_commands.json (cmake -DCMAKE_EXPORT_COMPILE_COMMANDS=ON,
@@ -570,7 +607,8 @@ install_lang_lisp() { apt_install sbcl; }
 
 install_lang_php() {
   apt_install php-cli php-xml php-mbstring unzip composer
-  composer install --working-dir="$REPO"
+  mkdir -p "$TOOLS_DIR"
+  composer require --no-interaction --working-dir="$TOOLS_DIR" "${COMPOSER_PACKAGES[@]}"
 }
 
 cmd_lsp() {
@@ -610,7 +648,7 @@ cmd_install() {
   cat <<EOF
 
 Done.  Next:
-  $REPO/scripts/setup.sh agents  # ACP agents for agent-shell
+  $REPO/scripts/setup.sh agent   # ACP agents for agent-shell
   $REPO/scripts/setup.sh lsp     # language servers for eglot
   emacs                          # first start installs the Emacs packages
 EOF
@@ -649,18 +687,23 @@ main() {
   done
   set -- ${args[@]+"${args[@]}"}
 
+  local cmd=${1:-install}
   if ! REPO=$(script_repo); then
-    bootstrap ${FLAGS[@]+"${FLAGS[@]}"} "$@"
+    REPO=
+    case $cmd in
+      agent | lsp) ;;
+      *) bootstrap ${FLAGS[@]+"${FLAGS[@]}"} "$@" ;;
+    esac
   fi
+  TOOLS_DIR=${REPO:-$LYANEMACS_DIR}
   setup_path
 
-  local cmd=${1:-install}
   shift || true
   case $cmd in
     install) cmd_install ;;
     pull) cmd_pull ;;
     sync) cmd_sync "$@" ;;
-    agents) cmd_agents "$@" ;;
+    agent) cmd_agent "$@" ;;
     lsp) cmd_lsp "$@" ;;
     *) usage >&2; exit 1 ;;
   esac

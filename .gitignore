@@ -1,8 +1,10 @@
-# Tools installed by `scripts/setup.sh lsp`
+# Tools installed by `scripts/setup.sh lsp` (npm / composer write their own manifests)
 /.venv/
 /node_modules/
 /vendor/
+/package.json
 /package-lock.json
+/composer.json
 /composer.lock
 
 # agent-shell transcripts

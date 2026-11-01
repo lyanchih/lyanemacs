@@ -1,2 +1,0 @@
-# Python language server for eglot, installed into .venv by `scripts/setup.sh lsp python`.
-python-lsp-server[all]
