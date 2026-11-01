@@ -1,0 +1,11 @@
+{
+  "name": "lyanemacs-tools",
+  "private": true,
+  "description": "Language servers and formatter for lisp/init.el, installed by `scripts/setup lsp web`",
+  "dependencies": {
+    "prettier": "*",
+    "typescript": "*",
+    "typescript-language-server": "*",
+    "vscode-langservers-extracted": "*"
+  }
+}

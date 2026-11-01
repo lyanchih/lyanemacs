@@ -1,0 +1,14 @@
+# Files scripts/setup installs into the home directory.
+#
+#   link  repo file is symlinked; edits in either place are the same file,
+#         so `setup pull` needs nothing more than git pull
+#   copy  repo file is copied; `setup pull` / `setup sync` refresh the copy,
+#         and ask first if the copy was edited locally (backup kept)
+#   git   upstream repository cloned once; `setup pull` fast-forwards it
+#
+# type  source                            target
+link    lisp/init.el                      ~/.emacs.d/init.el
+copy    lisp/agent-shell-hq-recall.el     ~/.emacs.d/lisp/agent-shell-hq-recall.el
+copy    lisp/agent-shell-tramp.el         ~/.emacs.d/lisp/agent-shell-tramp.el
+copy    lisp/agent-shell-fork-compat.el   ~/.emacs.d/lisp/agent-shell-fork-compat.el
+git     https://github.com/emacsattic/dired-single.git   ~/.emacs.d/site-lisp/dired-single

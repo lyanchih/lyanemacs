@@ -1,0 +1,10 @@
+{
+    "description": "PHP language server for lisp/init.el, installed by `scripts/setup lsp php`",
+    "require": {
+        "phpactor/phpactor": "*"
+    },
+    "minimum-stability": "stable",
+    "config": {
+        "allow-plugins": false
+    }
+}

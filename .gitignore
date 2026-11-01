@@ -1,0 +1,11 @@
+# Tools installed by `scripts/setup lsp`
+/.venv/
+/node_modules/
+/vendor/
+/package-lock.json
+/composer.lock
+
+# agent-shell transcripts
+.agent-shell/
+
+*.elc
