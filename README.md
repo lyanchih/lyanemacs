@@ -1,32 +1,32 @@
 # lyanemacs
 
 我的 Emacs 設定，取代原本用 gist 在家中 / 工作電腦間同步的方式。
-一支 `scripts/setup` 負責安裝 Emacs、同步設定、安裝 ACP agents 與 LSP，
+一支 `scripts/setup.sh` 負責安裝 Emacs、同步設定、安裝 ACP agents 與 LSP，
 本機執行或 `curl | bash` 都可以。
 
 ## 使用
 
 ```sh
 # 新電腦：purge apt Emacs、安裝 snap Emacs 31+、link / copy 設定檔
-curl -fsSL https://lyanemacs.qiyecaotw.net/scripts/setup | bash
+curl -fsSL https://lyanemacs.qiyecaotw.net/scripts/setup.sh | bash
 
 # 拉最新設定：git pull 後更新複製的檔案 (symlink 不需處理)
-curl -fsSL https://lyanemacs.qiyecaotw.net/scripts/setup | bash -s -- pull
+curl -fsSL https://lyanemacs.qiyecaotw.net/scripts/setup.sh | bash -s -- pull
 
 # ACP agents：沒裝的逐一詢問 y/N；指定名稱則直接安裝 / 升級
-curl -fsSL https://lyanemacs.qiyecaotw.net/scripts/setup | bash -s -- agents
-curl -fsSL https://lyanemacs.qiyecaotw.net/scripts/setup | bash -s -- agents claude codex
+curl -fsSL https://lyanemacs.qiyecaotw.net/scripts/setup.sh | bash -s -- agents
+curl -fsSL https://lyanemacs.qiyecaotw.net/scripts/setup.sh | bash -s -- agents claude codex
 
 # LSP：同上
-curl -fsSL https://lyanemacs.qiyecaotw.net/scripts/setup | bash -s -- lsp
-curl -fsSL https://lyanemacs.qiyecaotw.net/scripts/setup | bash -s -- lsp python rust
+curl -fsSL https://lyanemacs.qiyecaotw.net/scripts/setup.sh | bash -s -- lsp
+curl -fsSL https://lyanemacs.qiyecaotw.net/scripts/setup.sh | bash -s -- lsp python rust
 ```
 
 > 經 pipe 傳參數要用 `bash -s -- <args>`；`bash -- pull` 會把 `pull` 當成腳本檔名。
 
-已經有 checkout 時直接跑 `scripts/setup <command>` 即可。
+已經有 checkout 時直接跑 `scripts/setup.sh <command>` 即可。
 從 curl 執行時，腳本會 clone (或沿用) `~/repos/lyanemacs`，
-再執行那份 checkout 裡的 `scripts/setup`，所以兩種方式行為相同。
+再執行那份 checkout 裡的 `scripts/setup.sh`，所以兩種方式行為相同。
 
 | 指令 | 說明 |
 | --- | --- |
@@ -42,11 +42,11 @@ curl -fsSL https://lyanemacs.qiyecaotw.net/scripts/setup | bash -s -- lsp python
 ## 目錄
 
 ```
-lisp/          所有 Emacs Lisp，包括 init.el
-scripts/setup  安裝 / 同步腳本
-manifest.tsv   哪些檔案 link、哪些 copy、哪些 git clone
+lisp/             所有 Emacs Lisp，包括 init.el
+scripts/setup.sh  安裝 / 同步腳本
+manifest.tsv      哪些檔案 link、哪些 copy、哪些 git clone
 requirements.txt / package.json / composer.json
-               `setup lsp` 裝在本 repo 的 .venv / node_modules / vendor
+                  `setup.sh lsp` 裝在本 repo 的 .venv / node_modules / vendor
 ```
 
 ## manifest.tsv 與覆寫防呆
@@ -73,7 +73,7 @@ Emacs 忽略 `~/.emacs.d/init.el`，`install` 會提示移開。
 | antigravity | ACP registry 的 binary，驗 sha256 | `~/.cache/agent-shell/antigravity/<platform>`，wrapper 在 `~/.local/bin/agy_acp_server.par` |
 | opencode | `curl https://opencode.ai/install \| bash` | `~/.opencode/bin` |
 
-TRAMP 遠端要用 agent 時，在遠端主機上也跑一次 `setup agents`。
+TRAMP 遠端要用 agent 時，在遠端主機上也跑一次 `setup.sh agents`。
 
 ## LSP
 
@@ -88,7 +88,7 @@ TRAMP 遠端要用 agent 時，在遠端主機上也跑一次 `setup agents`。
 
 init.el 會把 repo 的 `.venv/bin`、`node_modules/.bin`、`vendor/bin` 加進 `exec-path`。
 
-新增語言：在 `scripts/setup` 加 `install_lang_<name>`，並更新 `LANGS`、
+新增語言：在 `scripts/setup.sh` 加 `install_lang_<name>`，並更新 `LANGS`、
 `lang_name`、`lang_installed`。
 
 ## GitHub Pages

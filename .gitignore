@@ -1,4 +1,4 @@
-# Tools installed by `scripts/setup lsp`
+# Tools installed by `scripts/setup.sh lsp`
 /.venv/
 /node_modules/
 /vendor/

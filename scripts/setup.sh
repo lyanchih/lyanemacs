@@ -1,11 +1,11 @@
 #!/usr/bin/env bash
 # lyanemacs setup: install and sync Emacs, its config, ACP agents and LSP servers.
 #
-#   curl -fsSL https://lyanemacs.qiyecaotw.net/scripts/setup | bash
-#   curl -fsSL https://lyanemacs.qiyecaotw.net/scripts/setup | bash -s -- pull
-#   curl -fsSL https://lyanemacs.qiyecaotw.net/scripts/setup | bash -s -- agents [name...]
-#   curl -fsSL https://lyanemacs.qiyecaotw.net/scripts/setup | bash -s -- lsp [lang...]
-#   scripts/setup <command>                      (from a checkout)
+#   curl -fsSL https://lyanemacs.qiyecaotw.net/scripts/setup.sh | bash
+#   curl -fsSL https://lyanemacs.qiyecaotw.net/scripts/setup.sh | bash -s -- pull
+#   curl -fsSL https://lyanemacs.qiyecaotw.net/scripts/setup.sh | bash -s -- agents [name...]
+#   curl -fsSL https://lyanemacs.qiyecaotw.net/scripts/setup.sh | bash -s -- lsp [lang...]
+#   scripts/setup.sh <command>                         (from a checkout)
 #
 # Piped from curl, the script clones (or reuses) $LYANEMACS_DIR and re-runs
 # that checkout's copy of itself, so both ways behave the same.
@@ -26,7 +26,7 @@ FLAGS=()
 
 usage() {
   cat <<'EOF'
-Usage: setup [-y] [command] [args...]
+Usage: setup.sh [-y] [command] [args...]
 
 Commands:
   install            (default) purge apt Emacs, install snap Emacs 31+,
@@ -192,7 +192,7 @@ bootstrap() {
     mkdir -p "$(dirname "$LYANEMACS_DIR")"
     git clone "$LYANEMACS_REPO" "$LYANEMACS_DIR"
   fi
-  exec bash "$LYANEMACS_DIR/scripts/setup" "$@"
+  exec bash "$LYANEMACS_DIR/scripts/setup.sh" "$@"
 }
 
 # ---------------------------------------------------------------- emacs
@@ -610,8 +610,8 @@ cmd_install() {
   cat <<EOF
 
 Done.  Next:
-  $REPO/scripts/setup agents     # ACP agents for agent-shell
-  $REPO/scripts/setup lsp        # language servers for eglot
+  $REPO/scripts/setup.sh agents  # ACP agents for agent-shell
+  $REPO/scripts/setup.sh lsp     # language servers for eglot
   emacs                          # first start installs the Emacs packages
 EOF
 }
@@ -625,7 +625,7 @@ cmd_pull() {
   git -C "$REPO" pull --ff-only ||
     die "git pull failed; commit or stash local changes in $REPO, then rerun pull"
   # Hand over to the freshly pulled script.
-  exec bash "$REPO/scripts/setup" ${FLAGS[@]+"${FLAGS[@]}"} sync --update
+  exec bash "$REPO/scripts/setup.sh" ${FLAGS[@]+"${FLAGS[@]}"} sync --update
 }
 
 cmd_sync() {

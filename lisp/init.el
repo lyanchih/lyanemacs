@@ -217,7 +217,7 @@ current project, this always creates a new shell."
     (setenv "PATH" (concat opencode-bin path-separator (getenv "PATH")))))
 
 ;; --- lyanemacs
-;; init.el 是 symlink 指回 repo；其他 lisp/*.el 由 scripts/setup 複製到 ~/.emacs.d/lisp
+;; init.el 是 symlink 指回 repo；其他 lisp/*.el 由 scripts/setup.sh 複製到 ~/.emacs.d/lisp
 (add-to-list 'load-path (expand-file-name "lisp" user-emacs-directory))
 
 (defconst my/lyanemacs-root
@@ -226,7 +226,7 @@ current project, this always creates a new shell."
     (file-name-directory (file-truename (or load-file-name buffer-file-name)))))
   "Root of the lyanemacs checkout that init.el is linked from.")
 
-;; `scripts/setup lsp' 把 LSP / prettier 裝在 repo 內 (.venv、node_modules、vendor)
+;; `scripts/setup.sh lsp' 把 LSP / prettier 裝在 repo 內 (.venv、node_modules、vendor)
 (dolist (dir '("vendor/bin" "node_modules/.bin" ".venv/bin"))
   (let ((bin (expand-file-name dir my/lyanemacs-root)))
     (when (file-directory-p bin)
@@ -244,7 +244,7 @@ current project, this always creates a new shell."
   (add-to-list 'tramp-remote-path "~/.local/node/bin")
   (add-to-list 'tramp-remote-path "~/.opencode/bin")
   (add-to-list 'tramp-remote-path "~/.local/bin")
-  ;; 遠端用預設位置 clone lyanemacs 並跑過 `scripts/setup lsp' 時的 LSP
+  ;; 遠端用預設位置 clone lyanemacs 並跑過 `scripts/setup.sh lsp' 時的 LSP
   (dolist (dir '("vendor/bin" "node_modules/.bin" ".venv/bin"))
     (add-to-list 'tramp-remote-path (concat "~/repos/lyanemacs/" dir) t)))
 
@@ -505,7 +505,7 @@ delete the agent's stored session."
   (web-mode-enable-auto-closing t)
   (web-mode-enable-current-element-highlight t))
 
-;; LSP：typescript-language-server / vscode-langservers-extracted 由 `scripts/setup lsp web` 安裝
+;; LSP：typescript-language-server / vscode-langservers-extracted 由 `scripts/setup.sh lsp web` 安裝
 (with-eval-after-load 'eglot
   (add-to-list 'eglot-server-programs
                '(web-mode . ("vscode-html-language-server" "--stdio"))))
@@ -517,13 +517,13 @@ delete the agent's stored session."
                 web-mode-hook))
   (add-hook hook #'eglot-ensure))
 
-;; --- Rust (rust-analyzer 由 `scripts/setup lsp rust' 安裝)
+;; --- Rust (rust-analyzer 由 `scripts/setup.sh lsp rust' 安裝)
 
 (use-package rust-mode
   :ensure t
   :hook (rust-mode . eglot-ensure))
 
-;; --- Common Lisp (sbcl 由 `scripts/setup lsp lisp' 安裝)
+;; --- Common Lisp (sbcl 由 `scripts/setup.sh lsp lisp' 安裝)
 
 (use-package sly
   :ensure t
@@ -535,7 +535,7 @@ delete the agent's stored session."
 (setq so-long-action 'so-long-minor-mode)
 (global-so-long-mode 1)
 
-;; 整檔美化：C-c f 用 prettier 排版（prettier 由 `scripts/setup lsp web` 安裝）
+;; 整檔美化：C-c f 用 prettier 排版（prettier 由 `scripts/setup.sh lsp web` 安裝）
 ;; 不開 format-on-save，避免存檔時意外重排整個壓縮檔
 (defun my-format-buffer ()
   "Reformat the whole buffer.

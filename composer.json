@@ -1,5 +1,5 @@
 {
-    "description": "PHP language server for lisp/init.el, installed by `scripts/setup lsp php`",
+    "description": "PHP language server for lisp/init.el, installed by `scripts/setup.sh lsp php`",
     "require": {
         "phpactor/phpactor": "*"
     },

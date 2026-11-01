@@ -1,4 +1,4 @@
-# Files scripts/setup installs into the home directory.
+# Files scripts/setup.sh installs into the home directory.
 #
 #   link  repo file is symlinked; edits in either place are the same file,
 #         so `setup pull` needs nothing more than git pull
