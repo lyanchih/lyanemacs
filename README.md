@@ -45,14 +45,19 @@ TRAMP 遠端主機。
 ## 目錄
 
 ```
-lisp/             所有 Emacs Lisp，包括 init.el
+lisp/             所有 Emacs Lisp
+  init.el           基本設定：套件、環境、外觀 / layout、buffer、dired、ace-window
+  my-shell.el       TRAMP、Ghostel
+  my-lang.el        各語言 mode、LSP (eglot)、格式化
+  my-agent-shell.el 上半部 agent-shell 擴充；下半部各 agent 所需實做
+  agent-shell-*.el  agent-shell 擴充套件 (複製到 ~/.emacs.d/lisp)
 scripts/setup.sh  安裝 / 同步腳本
 manifest.tsv      哪些檔案 link、哪些 copy、哪些 git clone
 ```
 
 ## manifest.tsv 與覆寫防呆
 
-- `link`：symlink 到 repo，`~/.emacs.d/init.el` 用這種。在 Emacs 改 init.el
+- `link`：symlink 到 repo，`init.el` 與 `my-*.el` 用這種。在 Emacs 改這些檔
   就是改 repo，記得 commit。
 - `copy`：複製到 `~/.emacs.d/lisp/`。sync 時會記錄每個檔案的 sha256
   (`~/.local/state/lyanemacs/copies`)：

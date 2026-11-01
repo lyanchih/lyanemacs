@@ -1,13 +1,16 @@
 # Files scripts/setup.sh installs into the home directory.
 #
 #   link  repo file is symlinked; edits in either place are the same file,
-#         so `setup pull` needs nothing more than git pull
+#         so `setup pull` needs nothing more than git pull (own config)
 #   copy  repo file is copied; `setup pull` / `setup sync` refresh the copy,
 #         and ask first if the copy was edited locally (backup kept)
 #   git   upstream repository cloned once; `setup pull` fast-forwards it
 #
 # type  source                            target
 link    lisp/init.el                      ~/.emacs.d/init.el
+link    lisp/my-shell.el                  ~/.emacs.d/lisp/my-shell.el
+link    lisp/my-lang.el                   ~/.emacs.d/lisp/my-lang.el
+link    lisp/my-agent-shell.el            ~/.emacs.d/lisp/my-agent-shell.el
 copy    lisp/agent-shell-hq-recall.el     ~/.emacs.d/lisp/agent-shell-hq-recall.el
 copy    lisp/agent-shell-tramp.el         ~/.emacs.d/lisp/agent-shell-tramp.el
 copy    lisp/agent-shell-fork-compat.el   ~/.emacs.d/lisp/agent-shell-fork-compat.el
